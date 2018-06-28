@@ -1,0 +1,83 @@
+---
+title: "Coursera Machine Learning Project"
+author: "Henk van Essen"
+date: "26 juni 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive summary
+In this study we try to detect the quality of the excercise of weight lifting. The quality of the excersize is defined by classes A through E. The measurements come from accelarometers at the waist, upper arm, fore arm and dumbbell. Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl.
+
+We concluded that we can detect the correct quality class with 99.4% accuracy using a random forest model.
+
+## Loading and processing data
+```{r message=FALSE}
+library(rpart)
+library(randomForest)
+library(caret)
+```
+```{r}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trainingdata <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+dim(trainingdata)
+# Exclude variables that can't be used for prediction
+cols <- grep("name|timestamp|window|X", colnames(trainingdata), value=F) 
+train <- trainingdata[,-cols]
+# Exclude variables with more than 20% missing data 
+NArate <- apply(train, 2, function(x) sum(is.na(x)))/nrow(train)
+train <- train[!(NArate>0.2)]
+dim(train)
+# Split in training and test subsets
+set.seed(120765)
+inTrain <- createDataPartition(train$classe, p=0.7, list=FALSE)
+subTrain <- train[inTrain, ]; subTest <- train[-inTrain, ]
+subTrain$classe <- factor(subTrain$classe)
+```
+
+## Creating and testing models
+
+```{r}
+# Build classification trees using the k-means cluster
+modKM <- rpart(classe ~ ., data=subTrain, method="class")
+predKMtrain <- predict(modKM, subTrain, type = "class")
+# In sample accuracy
+confusionMatrix(predKMtrain, subTrain$classe)$overall[1]
+
+# Cross validation
+predKM <- predict(modKM, subTest, type = "class")
+# Out of sample accuracy 
+confusionMatrix(predKM, subTest$classe)$overall[1]
+# Out of sample error of 27% is quite bad
+
+# Build Random Forrest model
+modRF <- randomForest(classe ~. , data=subTrain)
+predRFtrain <- predict(modRF, subTrain, type = "class")
+# In sample Accuracy
+confusionMatrix(predRFtrain, subTrain$classe)$overall[1]
+
+# Cross validation
+predRF <- predict(modRF, subTest, type = "class")
+# Out of sample Accuracy 
+confusionMatrix(predRF, subTest$classe)$overall[1]
+# Out of sample error for this model is 0.6%
+confusionMatrix(predRF, subTest$classe)
+```
+
+## Selection best model
+The Random Forest model performs best with an out-of-sample error of 0.4%. The K-means has an accuracy of only 73% and performs poorly for this data set.
+
+## Prediction of Testing data 
+```{r}
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testingdata <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+predict(modRF, testingdata, type="class")
+```
+
+## Reference
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers??? Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. Cited by 2 (Google Scholar)
+
+Read more: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises#ixzz3jOpnStGb
